@@ -4,29 +4,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct swap_info_struct_t {
-  char *name;
-  char *type;
-  uint32_t size;
-  uint32_t used;
-  int32_t priority;
-} swap_info_struct_t;
-
-typedef struct mem_info_struct_t {
-  uint32_t total;
-  uint32_t free;
-  uint32_t available;
-  uint32_t buffers;
-  uint32_t cached;
-  uint32_t swap_total;
-  uint32_t swap_free;
-} mem_info_struct_t;
+#include "types.h"
 
 #define xstr(x) #x
 #define str(x) xstr(x)
 
 #define PROC_SWAP_FILE "/proc/swaps"
 #define PROC_MEMINFO_FILE "/proc/meminfo"
+#define PROC_STAT_FILE "/proc/stat"
+#define PROC_DISKSTATS_FILE "/proc/diskstats"
+#define PROC_UPTIME_FILE "/proc/uptime"
 
 #define STREAM_BUFFER_INITIAL_SIZE 1024
 #define BUFFER_GROWTH_FACTOR 2
@@ -85,13 +72,14 @@ static void proc_swaps(swap_info_struct_t *const info) {
   info->priority = priority;
 
   free(stream);
+  return;
 }
 
-static void proc_meminfo(mem_info_struct_t *const info) {
+static void read_generic_proc_file(char const *const file_path, char *stream) {
   uint32_t current_stream_size = STREAM_BUFFER_INITIAL_SIZE;
-  char *stream = malloc(current_stream_size * sizeof(char));
+  stream = malloc(current_stream_size * sizeof(char));
 
-  FILE *mems = fopen(PROC_MEMINFO_FILE, "r");
+  FILE *mems = fopen(file_path, "r");
 
   int count = 0;
 
@@ -114,9 +102,10 @@ static void proc_meminfo(mem_info_struct_t *const info) {
 
   printf("%s\n", stream);
 
-  free(stream);
+  return;
 }
 
+#pragma weak main
 int main(int argc, char **argv) {
   swap_info_struct_t swap_info;
   proc_swaps(&swap_info);
@@ -127,8 +116,21 @@ int main(int argc, char **argv) {
   printf("used: %u\n", swap_info.used);
   printf("priority: %d\n", swap_info.priority);
 
-  mem_info_struct_t mem_info;
-  proc_meminfo(&mem_info);
+  char *meminfo_stream;
+  read_generic_proc_file(PROC_MEMINFO_FILE, meminfo_stream);
+  free(meminfo_stream);
+
+  char *statinfo_stream;
+  read_generic_proc_file(PROC_STAT_FILE, statinfo_stream);
+  free(statinfo_stream);
+
+  char *diskstat_stream;
+  read_generic_proc_file(PROC_DISKSTATS_FILE, diskstat_stream);
+  free(diskstat_stream);
+
+  char *uptime_stream;
+  read_generic_proc_file(PROC_UPTIME_FILE, uptime_stream);
+  free(uptime_stream);
 
   return 0;
 }
