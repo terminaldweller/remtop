@@ -157,13 +157,13 @@ tags:$(SRCS)
 	$(CC) -emit-llvm -S -o $@ $<
 
 %.wasm: %.c
-	emcc $< -o $@
+	emcc -sSTACK_OVERFLOW_CHECK=2 -fsanitize=address $< -o $@
 
 %.wast: %.wasm
 	wasm2wat $< > $@
 
 %.js: %.c
-	emcc $< -s FORCE_FILESYSTEM=1 -s EXIT_RUNTIME=1 -o $@
+	emcc $< -sSTACK_OVERFLOW_CHECK=2 -fsanitize=address -s FORCE_FILESYSTEM=1 -s EXIT_RUNTIME=1 -o $@
 
 %.ast: %.c
 	$(CC) -Xclang -ast-dump -fsyntax-only $< > $@

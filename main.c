@@ -46,8 +46,13 @@ static void proc_swaps(swap_info_struct_t *const info) {
       stream[count] = c;
       count++;
       if (count >= current_stream_size - 1) {
-        stream = realloc(stream, current_stream_size * BUFFER_GROWTH_FACTOR *
-                                     sizeof(char));
+        char *tmp = realloc(stream, current_stream_size * BUFFER_GROWTH_FACTOR *
+                                        sizeof(char));
+        if (tmp == NULL) {
+          fprintf(stderr, "Error: failed to realloc memory\n");
+          exit(1);
+        }
+        stream = tmp;
         current_stream_size = current_stream_size * BUFFER_GROWTH_FACTOR;
       }
     }
@@ -60,6 +65,7 @@ static void proc_swaps(swap_info_struct_t *const info) {
 
   if (ret != 5) {
     fprintf(stderr, "Error: failed to parse /proc/swaps\n");
+    fclose(swaps);
     exit(1);
   }
 
@@ -71,13 +77,14 @@ static void proc_swaps(swap_info_struct_t *const info) {
   info->used = used;
   info->priority = priority;
 
+  fclose(swaps);
   free(stream);
   return;
 }
 
-static void read_generic_proc_file(char const *const file_path, char *stream) {
+static char *read_generic_proc_file(char const *const file_path) {
   uint32_t current_stream_size = STREAM_BUFFER_INITIAL_SIZE;
-  stream = malloc(current_stream_size * sizeof(char));
+  char *stream = malloc(current_stream_size * sizeof(char));
 
   FILE *mems = fopen(file_path, "r");
 
@@ -93,43 +100,50 @@ static void read_generic_proc_file(char const *const file_path, char *stream) {
     stream[count] = c;
     count++;
     if (count >= current_stream_size - 1) {
-      stream = realloc(stream, current_stream_size * BUFFER_GROWTH_FACTOR *
-                                   sizeof(char));
-      current_stream_size = current_stream_size * BUFFER_GROWTH_FACTOR;
+      char *tmp = realloc(stream, current_stream_size * BUFFER_GROWTH_FACTOR *
+                                      sizeof(char));
+      if (tmp == NULL) {
+        fprintf(stderr, "Error: failed to realloc memory\n");
+        fclose(mems);
+        exit(1);
+      }
+      stream = tmp;
+      current_stream_size =
+          current_stream_size * BUFFER_GROWTH_FACTOR * sizeof(char);
     }
   }
   stream[count] = '\0';
+  fclose(mems);
 
-  printf("%s\n", stream);
-
-  return;
+  return stream;
 }
 
 #pragma weak main
 int main(int argc, char **argv) {
   swap_info_struct_t swap_info;
   proc_swaps(&swap_info);
-
   printf("name: %s\n", swap_info.name);
   printf("type: %s\n", swap_info.type);
   printf("size: %u\n", swap_info.size);
   printf("used: %u\n", swap_info.used);
   printf("priority: %d\n", swap_info.priority);
+  free(swap_info.name);
+  free(swap_info.type);
 
-  char *meminfo_stream;
-  read_generic_proc_file(PROC_MEMINFO_FILE, meminfo_stream);
+  char *meminfo_stream = read_generic_proc_file(PROC_MEMINFO_FILE);
+  printf("%s\n", meminfo_stream);
   free(meminfo_stream);
 
-  char *statinfo_stream;
-  read_generic_proc_file(PROC_STAT_FILE, statinfo_stream);
+  char *statinfo_stream = read_generic_proc_file(PROC_STAT_FILE);
+  printf("%s\n", statinfo_stream);
   free(statinfo_stream);
 
-  char *diskstat_stream;
-  read_generic_proc_file(PROC_DISKSTATS_FILE, diskstat_stream);
+  char *diskstat_stream = read_generic_proc_file(PROC_DISKSTATS_FILE);
+  printf("%s\n", diskstat_stream);
   free(diskstat_stream);
 
-  char *uptime_stream;
-  read_generic_proc_file(PROC_UPTIME_FILE, uptime_stream);
+  char *uptime_stream = read_generic_proc_file(PROC_UPTIME_FILE);
+  printf("%s\n", uptime_stream);
   free(uptime_stream);
 
   return 0;
