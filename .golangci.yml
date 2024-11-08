@@ -1,0 +1,18 @@
+run:
+  concurrency: 16
+  timeout: 5m
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+  allow-serial-runners: true
+  go: '1.22.3'
+linters-settings:
+  depguard:
+    rules:
+      srcs:
+        listMode: "Strict"
+        allow:
+        - $gostd
+        - github.com/prometheus/procfs
+        - github.com/prometheus/procfs/blockdevice
+        - github.com/gizak/termui/v3
+        - github.com/gizak/termui/v3/widgets
