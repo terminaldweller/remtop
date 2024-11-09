@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	ui "github.com/gizak/termui/v3"
@@ -113,28 +114,21 @@ func drawFunction() {
 		cpuGauge.BarColor = ui.ColorRed
 	}
 
-	diskGauge := widgets.NewGauge()
+	diskParagraph := widgets.NewParagraph()
 
-	diskGauge.Title = "Disk Usage"
+	diskParagraph.Title = "Disk Usage"
 
 	diskStats := getDiskStats()
 
-	diskGauge.Percent = min(100, int(diskStats[0].IOsInProgress))
-	diskGauge.SetRect(80, 4, 30, 3)
+	diskParagraph.SetRect(80, 4, 30, 3)
 
-	if diskGauge.Percent < 50 {
-		diskGauge.BarColor = ui.ColorGreen
-	} else if diskGauge.Percent < 75 {
-		diskGauge.BarColor = ui.ColorYellow
-	} else {
-		diskGauge.BarColor = ui.ColorRed
-	}
+	diskParagraph.Text = strconv.FormatUint(diskStats[0].IOsInProgress, 10)
 
 	grid.Set(ui.NewRow(
 		1.0,
 		ui.NewCol(0.2, memGauge),
 		ui.NewCol(0.2, cpuGauge),
-		ui.NewCol(0.2, diskGauge),
+		ui.NewCol(0.2, diskParagraph),
 	))
 
 	ui.Render(grid)
