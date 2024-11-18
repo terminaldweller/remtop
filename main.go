@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	ui "github.com/gizak/termui/v3"
@@ -11,6 +12,17 @@ import (
 	"github.com/prometheus/procfs"
 	blockdevice "github.com/prometheus/procfs/blockdevice"
 )
+
+var prevStat procfs.Stat
+
+func convertSeconds(seconds int) (days, hours, minutes int) {
+	days = seconds / (60 * 60 * 24)
+	seconds = seconds % (60 * 60 * 24)
+	hours = seconds / (60 * 60)
+	seconds = seconds % (60 * 60)
+	minutes = seconds / 60
+	return days, hours, minutes
+}
 
 func min(a, b int) int {
 	if a < b {
@@ -60,6 +72,37 @@ func getmeminfo(fs procfs.FS) *procfs.Meminfo {
 	return &meminfo
 }
 
+func getUptime() (int, int, int) {
+	uptime, err := os.ReadFile("/proc/uptime")
+	if err != nil {
+		log.Println(err)
+
+		return 0, 0, 0
+	}
+
+	uptimeStr := string(uptime)
+	uptimeStr = strings.TrimSuffix(uptimeStr, "\n")
+	uptimeSplit := strings.Split(uptimeStr, " ")
+
+	uptimeTotal, err := strconv.ParseFloat(uptimeSplit[0], 64)
+	if err != nil {
+		log.Println(err)
+
+		return 0, 0, 0
+	}
+
+	// uptimeIdle, err := strconv.ParseFloat(uptimeSplit[1], 64)
+	// if err != nil {
+	// 	log.Println(err)
+
+	// 	return 0, 0, 0
+	// }
+
+	days, hours, minutes := convertSeconds(int(uptimeTotal))
+
+	return days, hours, minutes
+}
+
 func drawFunction() {
 	fSystem, err := procfs.NewFS("/proc")
 	if err != nil {
@@ -86,7 +129,7 @@ func drawFunction() {
 
 	meminfo := getmeminfo(fSystem)
 
-	memGauge.Percent = min(100, int(*meminfo.MemAvailable*100 / *meminfo.MemTotal))
+	memGauge.Percent = min(100, 100-int(*meminfo.MemAvailable*100 / *meminfo.MemTotal))
 	memGauge.SetRect(0, 0, 30, 3)
 
 	if memGauge.Percent < 50 {
@@ -101,9 +144,22 @@ func drawFunction() {
 
 	cpuGauge.Title = "CPU Usage"
 
-	cpuInfo := getStat(fSystem)
+	stat := getStat(fSystem)
 
-	cpuGauge.Percent = min(100, int(cpuInfo.CPUTotal.User+cpuInfo.CPUTotal.System))
+	PrevIdle := prevStat.CPUTotal.Idle + prevStat.CPUTotal.Iowait
+	Idle := stat.CPUTotal.Idle + stat.CPUTotal.Iowait
+
+	prevNonIdle := prevStat.CPUTotal.User + prevStat.CPUTotal.Nice + prevStat.CPUTotal.System + prevStat.CPUTotal.IRQ + prevStat.CPUTotal.SoftIRQ + prevStat.CPUTotal.Steal
+	nonIdle := stat.CPUTotal.User + stat.CPUTotal.Nice + stat.CPUTotal.System + stat.CPUTotal.IRQ + stat.CPUTotal.SoftIRQ + stat.CPUTotal.Steal
+
+	prevTotal := PrevIdle + prevNonIdle
+	total := Idle + nonIdle
+
+	totald := total - prevTotal
+	idled := Idle - PrevIdle
+
+	cpuGauge.Percent = min(100, int(100*(totald-idled)/float64(totald)))
+
 	cpuGauge.SetRect(40, 4, 30, 3)
 
 	if cpuGauge.Percent < 50 {
@@ -114,21 +170,51 @@ func drawFunction() {
 		cpuGauge.BarColor = ui.ColorRed
 	}
 
+	prevStat = *stat
+
+	ioWait := widgets.NewGauge()
+
+	ioWait.Title = "IO Wait"
+
+	ioWait.Percent = min(100, int((stat.CPUTotal.Iowait-prevStat.CPUTotal.Iowait)/totald))
+
+	if ioWait.Percent < 50 {
+		ioWait.BarColor = ui.ColorGreen
+	} else if ioWait.Percent < 75 {
+		ioWait.BarColor = ui.ColorYellow
+	} else {
+		ioWait.BarColor = ui.ColorRed
+	}
+
 	diskParagraph := widgets.NewParagraph()
 
 	diskParagraph.Title = "Disk Usage"
 
 	diskStats := getDiskStats()
-
 	diskParagraph.SetRect(80, 4, 30, 3)
 
-	diskParagraph.Text = strconv.FormatUint(diskStats[0].IOsInProgress, 10)
+	diskParagraph.Text = strconv.FormatUint(diskStats[2].IOStats.ReadSectors*512, 10)
+
+	uptimeParagraph := widgets.NewParagraph()
+
+	uptimeParagraph.Title = "Uptime"
+
+	days, hours, minutes := getUptime()
+
+	uptimeParagraph.Text = strconv.Itoa(days) + "d " + strconv.Itoa(hours) + "h " + strconv.Itoa(minutes) + "m"
+
+	netWid := widgets.NewParagraph()
+
+	netWid.Title = "Network"
 
 	grid.Set(ui.NewRow(
 		1.0,
-		ui.NewCol(0.2, memGauge),
-		ui.NewCol(0.2, cpuGauge),
-		ui.NewCol(0.2, diskParagraph),
+		ui.NewCol(0.16, memGauge),
+		ui.NewCol(0.16, cpuGauge),
+		ui.NewCol(0.08, ioWait),
+		ui.NewCol(0.16, diskParagraph),
+		ui.NewCol(0.1, uptimeParagraph),
+		ui.NewCol(0.1, netWid),
 	))
 
 	ui.Render(grid)
@@ -149,7 +235,7 @@ func main() {
 	for {
 		select {
 		case event := <-uiEvents:
-			switch event.ID { // event string/identifier
+			switch event.ID {
 			case "q", "<C-c>":
 				return
 			case "<MouseLeft>":
