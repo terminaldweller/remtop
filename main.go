@@ -15,6 +15,22 @@ import (
 
 var prevStat procfs.Stat
 
+func formatWithUnderscore(number int) string {
+	numberStr := strconv.FormatInt(int64(number), 10)
+
+	var formattedNumber string
+
+	for i, digit := range numberStr {
+		if i > 0 && (len(numberStr)-i)%3 == 0 {
+			formattedNumber += "_"
+		}
+
+		formattedNumber += string(digit)
+	}
+
+	return formattedNumber
+}
+
 func convertSeconds(seconds int) (days, hours, minutes int) {
 	days = seconds / (60 * 60 * 24)
 	seconds = seconds % (60 * 60 * 24)
@@ -91,19 +107,13 @@ func getUptime() (int, int, int) {
 		return 0, 0, 0
 	}
 
-	// uptimeIdle, err := strconv.ParseFloat(uptimeSplit[1], 64)
-	// if err != nil {
-	// 	log.Println(err)
-
-	// 	return 0, 0, 0
-	// }
-
 	days, hours, minutes := convertSeconds(int(uptimeTotal))
 
 	return days, hours, minutes
 }
 
 func drawFunction() {
+	termWidth, _ := ui.TerminalDimensions()
 	fSystem, err := procfs.NewFS("/proc")
 	if err != nil {
 		log.Println(err)
@@ -112,7 +122,11 @@ func drawFunction() {
 	}
 
 	grid := ui.NewGrid()
-	grid.SetRect(0, 0, 200, 3)
+	grid.Border = true
+	grid.SetRect(0, 0, termWidth, 3)
+	grid.Title = "voidbox"
+	grid.TitleStyle = ui.NewStyle(ui.ColorRed)
+	grid.BorderStyle = ui.NewStyle(ui.ColorGreen)
 
 	data, err := os.ReadFile("/proc/meminfo")
 	if err != nil {
@@ -124,13 +138,13 @@ func drawFunction() {
 	}
 
 	memGauge := widgets.NewGauge()
+	memGauge.Border = true
 
 	memGauge.Title = "Memory Usage"
 
 	meminfo := getmeminfo(fSystem)
 
 	memGauge.Percent = min(100, 100-int(*meminfo.MemAvailable*100 / *meminfo.MemTotal))
-	memGauge.SetRect(0, 0, 30, 3)
 
 	if memGauge.Percent < 50 {
 		memGauge.BarColor = ui.ColorGreen
@@ -160,7 +174,7 @@ func drawFunction() {
 
 	cpuGauge.Percent = min(100, int(100*(totald-idled)/float64(totald)))
 
-	cpuGauge.SetRect(40, 4, 30, 3)
+	cpuGauge.Border = true
 
 	if cpuGauge.Percent < 50 {
 		cpuGauge.BarColor = ui.ColorGreen
@@ -178,9 +192,9 @@ func drawFunction() {
 
 	ioWait.Percent = min(100, int((stat.CPUTotal.Iowait-prevStat.CPUTotal.Iowait)/totald))
 
-	if ioWait.Percent < 50 {
+	if ioWait.Percent < 10 {
 		ioWait.BarColor = ui.ColorGreen
-	} else if ioWait.Percent < 75 {
+	} else if ioWait.Percent < 50 {
 		ioWait.BarColor = ui.ColorYellow
 	} else {
 		ioWait.BarColor = ui.ColorRed
@@ -191,9 +205,10 @@ func drawFunction() {
 	diskParagraph.Title = "Disk Usage"
 
 	diskStats := getDiskStats()
-	diskParagraph.SetRect(80, 4, 30, 3)
+	diskParagraph.Border = true
 
-	diskParagraph.Text = strconv.FormatUint(diskStats[2].IOStats.ReadSectors*512, 10)
+	// diskParagraph.Text = strconv.FormatUint(diskStats[2].IOStats.WeightedIOTicks, 10)
+	diskParagraph.Text = formatWithUnderscore(int(diskStats[2].WeightedIOTicks))
 
 	uptimeParagraph := widgets.NewParagraph()
 
@@ -203,18 +218,58 @@ func drawFunction() {
 
 	uptimeParagraph.Text = strconv.Itoa(days) + "d " + strconv.Itoa(hours) + "h " + strconv.Itoa(minutes) + "m"
 
+	if days >= 1 {
+		uptimeParagraph.TextStyle = ui.NewStyle(ui.ColorGreen)
+	} else {
+		uptimeParagraph.TextStyle = ui.NewStyle(ui.ColorYellow)
+
+	}
+
 	netWid := widgets.NewParagraph()
 
 	netWid.Title = "Network"
 
+	fNet, err := fSystem.NetDev()
+
+	netWid.Text = formatWithUnderscore(int(fNet.Total().RxBytes)) + "/" + formatWithUnderscore(int(fNet.Total().TxBytes))
+
+	loadAvg, err := fSystem.LoadAvg()
+
+	if err != nil {
+		log.Println(err)
+
+		return
+	}
+
+	loadAvgParagraph := widgets.NewParagraph()
+
+	loadAvgParagraph.Title = "Load Average"
+
+	loadAvgParagraph.Text = strconv.FormatFloat(loadAvg.Load1, 'f', 2, 64) + "/" + strconv.FormatFloat(loadAvg.Load5, 'f', 2, 64) + "/" + strconv.FormatFloat(loadAvg.Load15, 'f', 2, 64)
+
+	entropyParagraph := widgets.NewParagraph()
+
+	entropyParagraph.Title = "Entropy"
+
+	rand, err := fSystem.KernelRandom()
+
+	entropyParagraph.Text = strconv.FormatUint(*rand.EntropyAvaliable, 10)
+	if *rand.EntropyAvaliable >= 256 {
+		entropyParagraph.TextStyle = ui.NewStyle(ui.ColorGreen)
+	} else {
+		entropyParagraph.TextStyle = ui.NewStyle(ui.ColorYellow)
+	}
+
 	grid.Set(ui.NewRow(
-		1.0,
-		ui.NewCol(0.16, memGauge),
-		ui.NewCol(0.16, cpuGauge),
-		ui.NewCol(0.08, ioWait),
-		ui.NewCol(0.16, diskParagraph),
-		ui.NewCol(0.1, uptimeParagraph),
-		ui.NewCol(0.1, netWid),
+		1,
+		ui.NewCol(0.12, memGauge),
+		ui.NewCol(0.12, cpuGauge),
+		ui.NewCol(0.06, ioWait),
+		ui.NewCol(0.08, diskParagraph),
+		ui.NewCol(0.08, uptimeParagraph),
+		ui.NewCol(0.2, netWid),
+		ui.NewCol(0.1, loadAvgParagraph),
+		ui.NewCol(0.06, entropyParagraph),
 	))
 
 	ui.Render(grid)
