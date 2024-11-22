@@ -113,7 +113,8 @@ func getUptime() (int, int, int) {
 }
 
 func drawFunction() {
-	termWidth, _ := ui.TerminalDimensions()
+	termWidth, termHeight := ui.TerminalDimensions()
+
 	fSystem, err := procfs.NewFS("/proc")
 	if err != nil {
 		log.Println(err)
@@ -123,22 +124,17 @@ func drawFunction() {
 
 	grid := ui.NewGrid()
 	grid.Border = true
-	grid.SetRect(0, 0, termWidth, 3)
 	grid.Title = "voidbox"
+	grid.TitleStyle.Bg = ui.ColorBlue
+	grid.TitleStyle.Fg = ui.ColorWhite
 	grid.TitleStyle = ui.NewStyle(ui.ColorRed)
 	grid.BorderStyle = ui.NewStyle(ui.ColorGreen)
-
-	data, err := os.ReadFile("/proc/meminfo")
-	if err != nil {
-		log.Println(err)
-
-		grid.Title = ""
-	} else {
-		grid.Title = string(data)
-	}
+	grid.SetRect(1, 1, termWidth-3, termHeight-3)
 
 	memGauge := widgets.NewGauge()
 	memGauge.Border = true
+	memGauge.TitleStyle = ui.NewStyle(ui.ColorGreen)
+	memGauge.BorderStyle.Fg = ui.ColorCyan
 
 	memGauge.Title = "Memory Usage"
 
@@ -157,6 +153,8 @@ func drawFunction() {
 	cpuGauge := widgets.NewGauge()
 
 	cpuGauge.Title = "CPU Usage"
+	cpuGauge.BorderStyle = ui.NewStyle(ui.ColorCyan)
+	cpuGauge.TitleStyle = ui.NewStyle(ui.ColorGreen)
 
 	stat := getStat(fSystem)
 
@@ -189,6 +187,8 @@ func drawFunction() {
 	ioWait := widgets.NewGauge()
 
 	ioWait.Title = "IO Wait"
+	ioWait.BorderStyle = ui.NewStyle(ui.ColorCyan)
+	ioWait.TitleStyle = ui.NewStyle(ui.ColorGreen)
 
 	ioWait.Percent = min(100, int((stat.CPUTotal.Iowait-prevStat.CPUTotal.Iowait)/totald))
 
@@ -203,16 +203,20 @@ func drawFunction() {
 	diskParagraph := widgets.NewParagraph()
 
 	diskParagraph.Title = "Disk Usage"
+	diskParagraph.TitleStyle = ui.NewStyle(ui.ColorGreen)
+	diskParagraph.BorderStyle = ui.NewStyle(ui.ColorCyan)
 
 	diskStats := getDiskStats()
 	diskParagraph.Border = true
 
-	// diskParagraph.Text = strconv.FormatUint(diskStats[2].IOStats.WeightedIOTicks, 10)
 	diskParagraph.Text = formatWithUnderscore(int(diskStats[2].WeightedIOTicks))
 
 	uptimeParagraph := widgets.NewParagraph()
 
 	uptimeParagraph.Title = "Uptime"
+
+	uptimeParagraph.TitleStyle = ui.NewStyle(ui.ColorGreen)
+	uptimeParagraph.BorderStyle = ui.NewStyle(ui.ColorCyan)
 
 	days, hours, minutes := getUptime()
 
@@ -222,19 +226,23 @@ func drawFunction() {
 		uptimeParagraph.TextStyle = ui.NewStyle(ui.ColorGreen)
 	} else {
 		uptimeParagraph.TextStyle = ui.NewStyle(ui.ColorYellow)
-
 	}
 
 	netWid := widgets.NewParagraph()
 
 	netWid.Title = "Network"
 
+	netWid.TitleStyle = ui.NewStyle(ui.ColorGreen)
+	netWid.BorderStyle = ui.NewStyle(ui.ColorCyan)
+
 	fNet, err := fSystem.NetDev()
+	if err != nil {
+		log.Println(err)
+	}
 
 	netWid.Text = formatWithUnderscore(int(fNet.Total().RxBytes)) + "/" + formatWithUnderscore(int(fNet.Total().TxBytes))
 
 	loadAvg, err := fSystem.LoadAvg()
-
 	if err != nil {
 		log.Println(err)
 
@@ -245,13 +253,22 @@ func drawFunction() {
 
 	loadAvgParagraph.Title = "Load Average"
 
+	loadAvgParagraph.TitleStyle = ui.NewStyle(ui.ColorGreen)
+	loadAvgParagraph.BorderStyle = ui.NewStyle(ui.ColorCyan)
+
 	loadAvgParagraph.Text = strconv.FormatFloat(loadAvg.Load1, 'f', 2, 64) + "/" + strconv.FormatFloat(loadAvg.Load5, 'f', 2, 64) + "/" + strconv.FormatFloat(loadAvg.Load15, 'f', 2, 64)
 
 	entropyParagraph := widgets.NewParagraph()
 
 	entropyParagraph.Title = "Entropy"
 
+	entropyParagraph.TitleStyle = ui.NewStyle(ui.ColorGreen)
+	entropyParagraph.BorderStyle = ui.NewStyle(ui.ColorCyan)
+
 	rand, err := fSystem.KernelRandom()
+	if err != nil {
+		log.Println(err)
+	}
 
 	entropyParagraph.Text = strconv.FormatUint(*rand.EntropyAvaliable, 10)
 	if *rand.EntropyAvaliable >= 256 {
@@ -260,17 +277,24 @@ func drawFunction() {
 		entropyParagraph.TextStyle = ui.NewStyle(ui.ColorYellow)
 	}
 
-	grid.Set(ui.NewRow(
-		1,
-		ui.NewCol(0.12, memGauge),
-		ui.NewCol(0.12, cpuGauge),
-		ui.NewCol(0.06, ioWait),
-		ui.NewCol(0.08, diskParagraph),
-		ui.NewCol(0.08, uptimeParagraph),
-		ui.NewCol(0.2, netWid),
-		ui.NewCol(0.1, loadAvgParagraph),
-		ui.NewCol(0.06, entropyParagraph),
-	))
+	dummyParagraph := widgets.NewParagraph()
+	dummyParagraph.Text = "_"
+	dummy2Paragraph := widgets.NewParagraph()
+	dummy2Paragraph.Text = "_"
+
+	grid.Set(
+		ui.NewRow(
+			.07,
+			ui.NewCol(0.12, memGauge),
+			ui.NewCol(0.12, cpuGauge),
+			ui.NewCol(0.06, ioWait),
+			ui.NewCol(0.08, diskParagraph),
+			ui.NewCol(0.08, uptimeParagraph),
+			ui.NewCol(0.2, netWid),
+			ui.NewCol(0.1, loadAvgParagraph),
+			ui.NewCol(0.06, entropyParagraph),
+		),
+	)
 
 	ui.Render(grid)
 }
