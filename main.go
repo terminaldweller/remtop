@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -29,6 +30,23 @@ func formatWithUnderscore(number int) string {
 	}
 
 	return formattedNumber
+}
+
+func BytesToString(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+
+	div, exp := int64(unit), 0
+
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+
+		exp++
+	}
+
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 func convertSeconds(seconds int) (days, hours, minutes int) {
@@ -123,12 +141,6 @@ func drawFunction() {
 	}
 
 	grid := ui.NewGrid()
-	grid.Border = true
-	grid.Title = "voidbox"
-	grid.TitleStyle.Bg = ui.ColorBlue
-	grid.TitleStyle.Fg = ui.ColorWhite
-	grid.TitleStyle = ui.NewStyle(ui.ColorRed)
-	grid.BorderStyle = ui.NewStyle(ui.ColorGreen)
 	grid.SetRect(1, 1, termWidth-3, termHeight-3)
 
 	memGauge := widgets.NewGauge()
@@ -203,6 +215,7 @@ func drawFunction() {
 	diskParagraph := widgets.NewParagraph()
 
 	diskParagraph.Title = "Disk Usage"
+	diskParagraph.TextStyle = ui.NewStyle(ui.ColorBlue)
 	diskParagraph.TitleStyle = ui.NewStyle(ui.ColorGreen)
 	diskParagraph.BorderStyle = ui.NewStyle(ui.ColorCyan)
 
@@ -232,6 +245,7 @@ func drawFunction() {
 
 	netWid.Title = "Network"
 
+	netWid.TextStyle = ui.NewStyle(ui.ColorBlue)
 	netWid.TitleStyle = ui.NewStyle(ui.ColorGreen)
 	netWid.BorderStyle = ui.NewStyle(ui.ColorCyan)
 
@@ -240,7 +254,7 @@ func drawFunction() {
 		log.Println(err)
 	}
 
-	netWid.Text = formatWithUnderscore(int(fNet.Total().RxBytes)) + "/" + formatWithUnderscore(int(fNet.Total().TxBytes))
+	netWid.Text = BytesToString(int64(fNet.Total().RxBytes)) + "/" + BytesToString(int64(fNet.Total().TxBytes))
 
 	loadAvg, err := fSystem.LoadAvg()
 	if err != nil {
@@ -253,6 +267,7 @@ func drawFunction() {
 
 	loadAvgParagraph.Title = "Load Average"
 
+	loadAvgParagraph.TextStyle = ui.NewStyle(ui.ColorBlue)
 	loadAvgParagraph.TitleStyle = ui.NewStyle(ui.ColorGreen)
 	loadAvgParagraph.BorderStyle = ui.NewStyle(ui.ColorCyan)
 
@@ -277,20 +292,15 @@ func drawFunction() {
 		entropyParagraph.TextStyle = ui.NewStyle(ui.ColorYellow)
 	}
 
-	dummyParagraph := widgets.NewParagraph()
-	dummyParagraph.Text = "_"
-	dummy2Paragraph := widgets.NewParagraph()
-	dummy2Paragraph.Text = "_"
-
 	grid.Set(
 		ui.NewRow(
-			.07,
+			.06,
 			ui.NewCol(0.12, memGauge),
 			ui.NewCol(0.12, cpuGauge),
 			ui.NewCol(0.06, ioWait),
 			ui.NewCol(0.08, diskParagraph),
 			ui.NewCol(0.08, uptimeParagraph),
-			ui.NewCol(0.2, netWid),
+			ui.NewCol(0.1, netWid),
 			ui.NewCol(0.1, loadAvgParagraph),
 			ui.NewCol(0.06, entropyParagraph),
 		),
