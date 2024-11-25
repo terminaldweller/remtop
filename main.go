@@ -12,6 +12,7 @@ import (
 	"github.com/gizak/termui/v3/widgets"
 	"github.com/prometheus/procfs"
 	blockdevice "github.com/prometheus/procfs/blockdevice"
+	"golang.org/x/sys/unix"
 )
 
 var prevStat procfs.Stat
@@ -292,12 +293,43 @@ func drawFunction() {
 		entropyParagraph.TextStyle = ui.NewStyle(ui.ColorYellow)
 	}
 
+	hostname := widgets.NewParagraph()
+
+	hostname.Title = "hostname"
+
+	hostname.Text, err = os.Hostname()
+	if err != nil {
+		log.Println(err)
+	}
+
+	hostname.TextStyle = ui.NewStyle(ui.ColorBlue)
+	hostname.BorderStyle = ui.NewStyle(ui.ColorCyan)
+	hostname.TitleStyle = ui.NewStyle(ui.ColorGreen)
+
+	freeDiskSpace := widgets.NewParagraph()
+
+	freeDiskSpace.Title = "Disk"
+	freeDiskSpace.TextStyle = ui.NewStyle(ui.ColorBlue)
+	freeDiskSpace.TitleStyle = ui.NewStyle(ui.ColorGreen)
+	freeDiskSpace.BorderStyle = ui.NewStyle(ui.ColorCyan)
+
+	var dStat unix.Statfs_t
+
+	err = unix.Statfs("/", &dStat)
+	if err != nil {
+		log.Println(err)
+	}
+
+	freeDiskSpace.Text = BytesToString(int64(dStat.Bavail * uint64(dStat.Bsize)))
+
 	grid.Set(
 		ui.NewRow(
 			.06,
+			ui.NewCol(0.1, hostname),
 			ui.NewCol(0.12, memGauge),
 			ui.NewCol(0.12, cpuGauge),
 			ui.NewCol(0.06, ioWait),
+			ui.NewCol(0.06, freeDiskSpace),
 			ui.NewCol(0.08, diskParagraph),
 			ui.NewCol(0.08, uptimeParagraph),
 			ui.NewCol(0.1, netWid),
